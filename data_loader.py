@@ -251,7 +251,15 @@ def aggregate_time_series(
 
     base_groups = ["disease_key", "disease_name", "period"] + group_cols
 
-    agg_dict = {"op_id": "nunique"}  # unique visits as case count
+    # Use whichever ID column exists for case counting
+    id_col = next((c for c in ["op_id", "health_id"] if c in df.columns), None)
+    if id_col:
+        agg_dict = {id_col: "nunique"}
+    else:
+        # Fallback: add a dummy column to count rows
+        df["_row_id"] = range(len(df))
+        id_col = "_row_id"
+        agg_dict = {id_col: "count"}
 
     # Severity
     if "severity_score" in df.columns:
@@ -276,7 +284,7 @@ def aggregate_time_series(
 
     # Rename columns
     rename = {
-        "op_id": "case_count",
+        id_col: "case_count",
         "facility_id": "facility_count",
         "mandal": "mandal_count",
     }
