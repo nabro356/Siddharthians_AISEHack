@@ -68,7 +68,7 @@ def data_quality_report(df_raw: pd.DataFrame, df_clean: pd.DataFrame):
     report.append(f"Clean rows (target diseases only): {df_clean.shape[0]:,}")
     report.append(f"Columns: {df_clean.shape[1]}")
     report.append(f"Date range: {df_clean['event_date'].min()} to {df_clean['event_date'].max()}")
-    report.append(f"Unique patients (health_id): {df_clean['health_id'].nunique():,}")
+    report.append(f"Unique visits (op_id): {df_clean['op_id'].nunique():,}")
     report.append(f"Unique facilities: {df_clean.get('facility_id', pd.Series()).nunique()}")
     report.append(f"Unique districts: {df_clean.get('district', pd.Series()).nunique()}")
     report.append(f"Unique mandals: {df_clean.get('mandal', pd.Series()).nunique()}")
@@ -523,8 +523,8 @@ def geographic_analysis(df_clean: pd.DataFrame):
     # Cases by district per disease
     if "district" in df_clean.columns:
         geo = df_clean.groupby(["disease_name", "district"]).agg(
-            cases=("health_id", "nunique"),
-            facilities=("facility_id", "nunique") if "facility_id" in df_clean.columns else ("health_id", "count"),
+            cases=("op_id", "nunique"),
+            facilities=("facility_id", "nunique") if "facility_id" in df_clean.columns else ("op_id", "count"),
         ).reset_index()
         geo.to_csv(os.path.join(OUTPUT_DIR, "geographic_distribution.csv"), index=False)
 
@@ -558,7 +558,7 @@ def geographic_analysis(df_clean: pd.DataFrame):
         spread = df_tmp.groupby(["disease_name", "week"]).agg(
             mandal_count=("mandal", "nunique"),
             district_count=("district", "nunique") if "district" in df_tmp.columns else ("mandal", "nunique"),
-            cases=("health_id", "nunique"),
+            cases=("op_id", "nunique"),
         ).reset_index()
         spread.to_csv(os.path.join(OUTPUT_DIR, "weekly_spread_index.csv"), index=False)
         print("Weekly spread index saved.")
