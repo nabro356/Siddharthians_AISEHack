@@ -752,3 +752,4 @@ if __name__ == "__main__":
 
     print(f"Loaded: {df.shape[0]:,} rows × {df.shape[1]} columns")
     run_full_eda(df)
+
