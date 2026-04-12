@@ -80,6 +80,9 @@ def load_and_clean(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
     # --- Step 7: Parse geolocation ---
     df_filtered = _parse_geolocation(df_filtered, verbose)
 
+    # --- Step 8: Fill missing geolocation from mandal lookup ---
+    df_filtered = _fill_geo_from_lookup(df_filtered, verbose)
+
     if verbose:
         print(f"[DONE] Clean data: {df_filtered.shape[0]:,} rows × {df_filtered.shape[1]} columns")
         print(f"       Date range: {df_filtered['event_date'].min()} to {df_filtered['event_date'].max()}")
@@ -187,6 +190,36 @@ def _parse_geolocation(df: pd.DataFrame, verbose: bool) -> pd.DataFrame:
     return df
 
 
+def _fill_geo_from_lookup(df: pd.DataFrame, verbose: bool) -> pd.DataFrame:
+    """Fill missing lat/lon from mandal centroid lookup file."""
+    import os
+    lookup_path = os.path.join(os.path.dirname(__file__), "mandal_geocode_lookup.csv")
+
+    if not os.path.exists(lookup_path):
+        if verbose:
+            print(f"[8/8] No mandal geocode lookup found. Skipping geo fill.")
+            n_missing = df["latitude"].isna().sum() if "latitude" in df.columns else 0
+            if n_missing > 0:
+                print(f"       {n_missing:,} records still missing geolocation.")
+                print(f"       Run: python mandal_geocoder.py --build --data your_data.csv")
+        return df
+
+    try:
+        from mandal_geocoder import load_lookup, apply_geocoding
+        lookup = load_lookup(lookup_path)
+        if not lookup.empty:
+            before = df["latitude"].isna().sum() if "latitude" in df.columns else 0
+            df = apply_geocoding(df, lookup)
+            after = df["latitude"].isna().sum() if "latitude" in df.columns else 0
+            if verbose:
+                print(f"[8/8] Geocode fill: {before - after:,} records filled from mandal lookup")
+    except ImportError:
+        if verbose:
+            print(f"[8/8] mandal_geocoder module not found. Skipping geo fill.")
+
+    return df
+
+
 def aggregate_time_series(
     df: pd.DataFrame,
     freq: str = "W",
@@ -218,7 +251,7 @@ def aggregate_time_series(
 
     base_groups = ["disease_key", "disease_name", "period"] + group_cols
 
-    agg_dict = {"health_id": "nunique"}  # unique patients as case count
+    agg_dict = {"op_id": "nunique"}  # unique visits as case count
 
     # Severity
     if "severity_score" in df.columns:
@@ -243,7 +276,7 @@ def aggregate_time_series(
 
     # Rename columns
     rename = {
-        "health_id": "case_count",
+        "op_id": "case_count",
         "facility_id": "facility_count",
         "mandal": "mandal_count",
     }
