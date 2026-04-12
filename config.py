@@ -149,6 +149,13 @@ VITAL_THRESHOLDS = {
 # SEVERITY MAPPING
 # =============================================================================
 SEVERITY_MAP = {
+    # Numeric string values (as found in AP data)
+    "0": 0,
+    "1": 1,
+    "2": 2,
+    "3": 3,
+    # Text values (fallback)
+    "none": 0,
     "mild": 1,
     "moderate": 2,
     "severe": 3,
