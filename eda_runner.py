@@ -68,10 +68,14 @@ def data_quality_report(df_raw: pd.DataFrame, df_clean: pd.DataFrame):
     report.append(f"Clean rows (target diseases only): {df_clean.shape[0]:,}")
     report.append(f"Columns: {df_clean.shape[1]}")
     report.append(f"Date range: {df_clean['event_date'].min()} to {df_clean['event_date'].max()}")
-    report.append(f"Unique visits (op_id): {df_clean['op_id'].nunique():,}")
-    report.append(f"Unique facilities: {df_clean.get('facility_id', pd.Series()).nunique()}")
-    report.append(f"Unique districts: {df_clean.get('district', pd.Series()).nunique()}")
-    report.append(f"Unique mandals: {df_clean.get('mandal', pd.Series()).nunique()}")
+    # Use whichever ID column exists
+    id_col = next((c for c in ["op_id", "health_id"] if c in df_clean.columns), None)
+    if id_col:
+        report.append(f"Unique IDs ({id_col}): {df_clean[id_col].nunique():,}")
+    report.append(f"Total records: {len(df_clean):,}")
+    report.append(f"Unique facilities: {df_clean[c].nunique():,}" if (c := next((x for x in ['facility_id', 'master_facility_id'] if x in df_clean.columns), None)) else "Unique facilities: N/A")
+    report.append(f"Unique districts: {df_clean['district'].nunique():,}" if 'district' in df_clean.columns else "Unique districts: N/A")
+    report.append(f"Unique mandals: {df_clean['mandal'].nunique():,}" if 'mandal' in df_clean.columns else "Unique mandals: N/A")
 
     report_text = "\n".join(report)
     print(report_text)
@@ -522,10 +526,13 @@ def geographic_analysis(df_clean: pd.DataFrame):
 
     # Cases by district per disease
     if "district" in df_clean.columns:
-        geo = df_clean.groupby(["disease_name", "district"]).agg(
-            cases=("op_id", "nunique"),
-            facilities=("facility_id", "nunique") if "facility_id" in df_clean.columns else ("op_id", "count"),
-        ).reset_index()
+        id_col = next((c for c in ["op_id", "health_id"] if c in df_clean.columns), None)
+        if id_col:
+            geo = df_clean.groupby(["disease_name", "district"]).agg(
+                cases=(id_col, "nunique"),
+            ).reset_index()
+        else:
+            geo = df_clean.groupby(["disease_name", "district"]).size().reset_index(name="cases")
         geo.to_csv(os.path.join(OUTPUT_DIR, "geographic_distribution.csv"), index=False)
 
     # Mandal-level concentration
@@ -555,11 +562,15 @@ def geographic_analysis(df_clean: pd.DataFrame):
     if "mandal" in df_clean.columns and "event_date" in df_clean.columns:
         df_tmp = df_clean.copy()
         df_tmp["week"] = df_tmp["event_date"].dt.to_period("W").dt.to_timestamp()
-        spread = df_tmp.groupby(["disease_name", "week"]).agg(
-            mandal_count=("mandal", "nunique"),
-            district_count=("district", "nunique") if "district" in df_tmp.columns else ("mandal", "nunique"),
-            cases=("op_id", "nunique"),
-        ).reset_index()
+        id_col = next((c for c in ["op_id", "health_id"] if c in df_tmp.columns), None)
+        agg_d = {"mandal_count": ("mandal", "nunique")}
+        if "district" in df_tmp.columns:
+            agg_d["district_count"] = ("district", "nunique")
+        if id_col:
+            agg_d["cases"] = (id_col, "nunique")
+        else:
+            agg_d["cases"] = ("mandal", "count")
+        spread = df_tmp.groupby(["disease_name", "week"]).agg(**agg_d).reset_index()
         spread.to_csv(os.path.join(OUTPUT_DIR, "weekly_spread_index.csv"), index=False)
         print("Weekly spread index saved.")
 
