@@ -69,7 +69,6 @@ DISEASE_CODES = {
 # =============================================================================
 COLUMN_MAP = {
     # Patient & Clinical
-    "health_id": "health_id",
     "op_id": "op_id",
     "diagnosis": "diagnosis_code",
     "diagnosis_name": "diagnosis_name",
