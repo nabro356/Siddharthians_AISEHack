@@ -274,10 +274,10 @@ def aggregate_time_series(
         if vital in df.columns:
             agg_dict[vital] = "mean"
 
-    # Facilities and mandals (spread)
-    if "facility_id" in df.columns:
+    # Facilities and mandals (spread) — skip if already a grouping column
+    if "facility_id" in df.columns and "facility_id" not in group_cols:
         agg_dict["facility_id"] = "nunique"
-    if "mandal" in df.columns:
+    if "mandal" in df.columns and "mandal" not in group_cols:
         agg_dict["mandal"] = "nunique"
 
     result = df.groupby(base_groups, observed=True).agg(agg_dict).reset_index()
