@@ -1,0 +1,32 @@
+# Cell: Aggregate time series (run directly, no imports needed)
+def aggregate_ts(df, freq="W", group_cols=None):
+    if group_cols is None:
+        group_cols = []
+    df = df.dropna(subset=["event_date"]).copy()
+    df["period"] = df["event_date"].dt.to_period(freq).dt.to_timestamp()
+    
+    base_groups = ["disease_key", "disease_name", "period"] + group_cols
+    
+    id_col = next((c for c in ["op_id", "health_id"] if c in df.columns), None)
+    agg_dict = {id_col: "nunique"} if id_col else {}
+    
+    # Only aggregate mandal/facility if NOT a group column
+    if "mandal" in df.columns and "mandal" not in group_cols:
+        agg_dict["mandal"] = "nunique"
+    if "facility_id" in df.columns and "facility_id" not in group_cols:
+        agg_dict["facility_id"] = "nunique"
+    
+    result = df.groupby(base_groups, observed=True).agg(agg_dict).reset_index()
+    
+    rename = {}
+    if id_col and id_col in result.columns: rename[id_col] = "case_count"
+    if "facility_id" in result.columns and "facility_id" not in group_cols: rename["facility_id"] = "facility_count"
+    if "mandal" in result.columns and "mandal" not in group_cols: rename["mandal"] = "mandal_count"
+    result = result.rename(columns=rename)
+    
+    return result.sort_values(["disease_key", "period"]).reset_index(drop=True)
+
+ts_weekly = aggregate_ts(df_clean, freq="W")
+ts_mandal_weekly = aggregate_ts(df_clean, freq="W", group_cols=["mandal"])
+ts_district_weekly = aggregate_ts(df_clean, freq="W", group_cols=["district"])
+print(f"State-level: {ts_weekly.shape}, Mandal-level: {ts_mandal_weekly.shape}, District-level: {ts_district_weekly.shape}")
