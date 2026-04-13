@@ -315,7 +315,7 @@ def walk_forward_cv(disease_key, ts_weekly, forecast_horizon=4, n_splits=5):
     disease_name = disease_data["disease_name"].iloc[0]
 
     n = len(disease_data)
-    min_train = max(52, disease_info.get("min_weeks", 50))
+    min_train = max(20, disease_info.get("min_weeks", 50))
 
     if n < min_train + forecast_horizon:
         print(f"  {disease_name}: Not enough data ({n} weeks). Need {min_train + forecast_horizon}.")
