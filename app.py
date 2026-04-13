@@ -104,8 +104,16 @@ def load_data(file_path):
 @st.cache_data(show_spinner="Aggregating time series...")
 def get_time_series(df_clean):
     ts_weekly = aggregate_time_series(df_clean, freq="W")
-    ts_mandal_weekly = aggregate_time_series(df_clean, freq="W", group_cols=["mandal"])
-    ts_district_weekly = aggregate_time_series(df_clean, freq="W", group_cols=["district"])
+    
+    # Only aggregate by mandal/district if those columns exist in the clean data
+    ts_mandal_weekly = pd.DataFrame()
+    if "mandal" in df_clean.columns:
+        ts_mandal_weekly = aggregate_time_series(df_clean, freq="W", group_cols=["mandal"])
+        
+    ts_district_weekly = pd.DataFrame()
+    if "district" in df_clean.columns:
+        ts_district_weekly = aggregate_time_series(df_clean, freq="W", group_cols=["district"])
+        
     return ts_weekly, ts_mandal_weekly, ts_district_weekly
 
 
