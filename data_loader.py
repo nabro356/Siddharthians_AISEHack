@@ -282,12 +282,15 @@ def aggregate_time_series(
 
     result = df.groupby(base_groups, observed=True).agg(agg_dict).reset_index()
 
-    # Rename columns
+    # Rename columns — but NOT group columns
     rename = {
         id_col: "case_count",
         "facility_id": "facility_count",
         "mandal": "mandal_count",
     }
-    result = result.rename(columns={k: v for k, v in rename.items() if k in result.columns})
+    # Remove group columns from rename (they should keep their original names)
+    rename = {k: v for k, v in rename.items() if k in result.columns and k not in group_cols}
+    result = result.rename(columns=rename)
 
-    return result.sort_values(["disease_key"] + ["period"] + group_cols).reset_index(drop=True)
+    sort_cols = ["disease_key", "period"] + [c for c in group_cols if c in result.columns]
+    return result.sort_values(sort_cols).reset_index(drop=True)
