@@ -43,7 +43,7 @@ DISEASE_CODES = {
     },
     "cholera": {
         "name": "Cholera",
-        "codes": ["81020007"],
+        "codes": ["7718000"],
         "category": "waterborne",
     },
     "gastroenteritis": {
