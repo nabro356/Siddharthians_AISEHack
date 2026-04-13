@@ -191,6 +191,21 @@ COLUMN_MAP = {
     "diagnosis_name": "diagnosis_name",
     "diagnosis_event_ts": "event_timestamp",
     "visit": "visit",
+    # Geographic
+    "district": "district",
+    "district_name": "district",
+    "sub_district": "mandal",
+    "sub_district_name": "mandal",
+    "mandal": "mandal",
+    "mandal_name": "mandal",
+    # Facility
+    "master_facility_id": "facility_id",
+    "facility_id": "facility_id",
+    "facility_name": "facility_name",
+    # Geolocation
+    "latitude": "latitude",
+    "longitude": "longitude",
+    "geolocation": "geolocation",
     # Symptoms
     "complaint": "complaint_code",
     "complaint_name": "complaint_name",
