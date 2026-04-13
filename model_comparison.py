@@ -74,9 +74,14 @@ MODELABLE_DISEASES = {
         "covariates": ["mandal_count"],
         "notes": "801 cases/51 weeks. Borderline — fewer folds needed.",
     },
+    "cholera": {
+        "min_weeks": 20,
+        "covariates": ["mandal_count"],
+        "notes": "331 cases. Waterborne — seasonal pattern expected.",
+    },
 }
 
-RULES_ONLY_DISEASES = ["ebola", "cholera"]
+RULES_ONLY_DISEASES = ["ebola"]
 
 
 def ensure_output_dir():
@@ -267,9 +272,13 @@ def fit_negbin_glm(train_df, test_df, target_col="case_count"):
         train = df.iloc[:n_train]
         test = df.iloc[n_train:]
 
-        X_train = sm.add_constant(train[feature_cols].values.astype(float))
+        X_train_raw = train[feature_cols].values.astype(float)
         y_train = train[target_col].values.astype(float)
-        X_test = sm.add_constant(test[feature_cols].values.astype(float))
+        X_test_raw = test[feature_cols].values.astype(float)
+
+        # Manually add constant column (sm.add_constant is unreliable)
+        X_train = np.column_stack([np.ones(len(X_train_raw)), X_train_raw])
+        X_test = np.column_stack([np.ones(len(X_test_raw)), X_test_raw])
 
         model = sm.GLM(y_train, X_train, family=sm.families.NegativeBinomial(alpha=1.0))
         fit = model.fit()
