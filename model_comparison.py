@@ -64,9 +64,19 @@ MODELABLE_DISEASES = {
         "covariates": ["mandal_count", "spo2"],
         "notes": "Difference-stationary, overdispersed, declining trend.",
     },
+    "malaria": {
+        "min_weeks": 50,
+        "covariates": ["mandal_count"],
+        "notes": "4,872 cases/219 weeks. Previously sparse but full dataset is modelable.",
+    },
+    "chikungunya": {
+        "min_weeks": 30,
+        "covariates": ["mandal_count"],
+        "notes": "801 cases/51 weeks. Borderline — fewer folds needed.",
+    },
 }
 
-RULES_ONLY_DISEASES = ["malaria", "ebola", "chikungunya", "cholera"]
+RULES_ONLY_DISEASES = ["ebola", "cholera"]
 
 
 def ensure_output_dir():
@@ -123,38 +133,36 @@ def fit_holt_winters(train, horizon, seasonal_periods=52):
     """Holt-Winters Exponential Smoothing."""
     name = "Holt-Winters"
     try:
-        # Try multiplicative first, fall back to additive
-        if (train > 0).all() and len(train) >= 2 * seasonal_periods:
+        train_series = pd.Series(np.asarray(train, dtype=float))
+
+        if (train_series > 0).all() and len(train_series) >= 2 * seasonal_periods:
             model = ExponentialSmoothing(
-                train, trend="add", seasonal="add",
+                train_series, trend="add", seasonal="add",
                 seasonal_periods=seasonal_periods,
                 initialization_method="estimated",
             )
-        elif len(train) >= 2 * seasonal_periods:
+        elif len(train_series) >= 2 * seasonal_periods:
             model = ExponentialSmoothing(
-                train, trend="add", seasonal="add",
+                train_series, trend="add", seasonal="add",
                 seasonal_periods=seasonal_periods,
                 initialization_method="estimated",
             )
         else:
-            # Not enough data for seasonal — use trend only with damping
             model = ExponentialSmoothing(
-                train, trend="add", damped_trend=True,
+                train_series, trend="add", damped_trend=True,
                 initialization_method="estimated",
             )
             name = "Holt-Winters (no season)"
 
         fit = model.fit(optimized=True, use_brute=True)
         pred = fit.forecast(horizon)
-        pred = np.maximum(pred, 0)  # Case counts can't be negative
+        pred_arr = np.maximum(np.asarray(pred, dtype=float), 0)
 
-        # Approximate prediction intervals via residual std
-        resid_std = np.std(fit.resid.dropna())
-        lower = pred - 1.96 * resid_std
-        upper = pred + 1.96 * resid_std
-        lower = np.maximum(lower, 0)
+        resid_std = np.nanstd(np.asarray(fit.resid, dtype=float))
+        lower = np.maximum(pred_arr - 1.96 * resid_std, 0)
+        upper = pred_arr + 1.96 * resid_std
 
-        return name, pred.values, lower.values, upper.values
+        return name, pred_arr, lower, upper
     except Exception as e:
         return name, None, None, f"Error: {e}"
 
@@ -163,23 +171,24 @@ def fit_sarima(train, horizon, order=(1, 1, 1), seasonal_order=(1, 1, 1, 52)):
     """SARIMA model."""
     name = f"SARIMA{order}x{seasonal_order}"
     try:
-        # If not enough data for seasonal ARIMA, use simple ARIMA
-        if len(train) < 2 * seasonal_order[3]:
+        train_series = pd.Series(np.asarray(train, dtype=float))
+
+        if len(train_series) < 2 * seasonal_order[3]:
             seasonal_order = (0, 0, 0, 0)
             name = f"ARIMA{order}"
 
         model = SARIMAX(
-            train, order=order, seasonal_order=seasonal_order,
+            train_series, order=order, seasonal_order=seasonal_order,
             enforce_stationarity=False, enforce_invertibility=False,
         )
         fit = model.fit(disp=False, maxiter=200)
         forecast = fit.get_forecast(horizon)
-        pred = forecast.predicted_mean
+        pred = np.asarray(forecast.predicted_mean, dtype=float)
         ci = forecast.conf_int(alpha=0.05)
 
-        pred = np.maximum(pred.values, 0)
-        lower = np.maximum(ci.iloc[:, 0].values, 0)
-        upper = ci.iloc[:, 1].values
+        pred = np.maximum(pred, 0)
+        lower = np.maximum(np.asarray(ci.iloc[:, 0], dtype=float), 0)
+        upper = np.asarray(ci.iloc[:, 1], dtype=float)
 
         return name, pred, lower, upper
     except Exception as e:
@@ -190,9 +199,10 @@ def fit_ucm(train, horizon, level=True, trend=True, seasonal=52, covariates_trai
     """Unobserved Components Model (BSTS-like)."""
     name = "UCM/BSTS"
     try:
+        train_series = pd.Series(np.asarray(train, dtype=float))
         spec = {"level": "local linear trend" if trend else "local level"}
 
-        if seasonal and len(train) >= 2 * seasonal:
+        if seasonal and len(train_series) >= 2 * seasonal:
             spec["seasonal"] = seasonal
         else:
             seasonal = None
@@ -201,7 +211,7 @@ def fit_ucm(train, horizon, level=True, trend=True, seasonal=52, covariates_trai
             spec["exog"] = covariates_train
             name = f"UCM+covariates"
 
-        model = UnobservedComponents(train, **spec)
+        model = UnobservedComponents(train_series, **spec)
         fit = model.fit(disp=False, maxiter=300)
 
         forecast_kwargs = {}
@@ -209,12 +219,12 @@ def fit_ucm(train, horizon, level=True, trend=True, seasonal=52, covariates_trai
             forecast_kwargs["exog"] = covariates_test
 
         forecast = fit.get_forecast(horizon, **forecast_kwargs)
-        pred = forecast.predicted_mean
+        pred = np.asarray(forecast.predicted_mean, dtype=float)
         ci = forecast.conf_int(alpha=0.05)
 
-        pred = np.maximum(pred.values, 0)
-        lower = np.maximum(ci.iloc[:, 0].values, 0)
-        upper = ci.iloc[:, 1].values
+        pred = np.maximum(pred, 0)
+        lower = np.maximum(np.asarray(ci.iloc[:, 0], dtype=float), 0)
+        upper = np.asarray(ci.iloc[:, 1], dtype=float)
 
         return name, pred, lower, upper
     except Exception as e:
@@ -225,19 +235,19 @@ def fit_negbin_glm(train_df, test_df, target_col="case_count"):
     """Negative Binomial GLM with lag features."""
     name = "NegBin GLM"
     try:
-        # Create lag features
-        df = pd.concat([train_df, test_df]).copy()
+        df = pd.concat([train_df, test_df], ignore_index=True).copy()
         df["lag_1"] = df[target_col].shift(1)
         df["lag_2"] = df[target_col].shift(2)
         df["lag_4"] = df[target_col].shift(4)
         df["rolling_4"] = df[target_col].shift(1).rolling(4, min_periods=1).mean()
         df["month"] = pd.to_datetime(df["period"]).dt.month
 
-        # Month dummies
-        month_dummies = pd.get_dummies(df["month"], prefix="m", drop_first=True).astype(float)
-        df = pd.concat([df, month_dummies], axis=1)
+        # Fixed month dummies — always 11 columns (months 2-12) regardless of data
+        for m in range(2, 13):
+            df[f"m_{m}"] = (df["month"] == m).astype(float)
+        month_cols = [f"m_{m}" for m in range(2, 13)]
 
-        feature_cols = ["lag_1", "lag_2", "lag_4", "rolling_4"] + [c for c in month_dummies.columns]
+        feature_cols = ["lag_1", "lag_2", "lag_4", "rolling_4"] + month_cols
 
         # Add covariates if available
         for cov in ["mandal_count", "duration_days", "spo2"]:
@@ -245,30 +255,29 @@ def fit_negbin_glm(train_df, test_df, target_col="case_count"):
                 df[cov] = df[cov].fillna(df[cov].median())
                 feature_cols.append(cov)
 
-        df = df.dropna(subset=feature_cols + [target_col])
+        df = df.dropna(subset=["lag_1", "lag_2", "lag_4", target_col])
 
-        n_train = len(train_df)
-        # Adjust for rows lost to lag creation
-        train = df.iloc[:max(1, n_train - 4)]
-        test = df.iloc[max(1, n_train - 4):]
+        n_total = len(df)
+        n_test = min(len(test_df), n_total // 5)  # test is at most 20% of usable data
+        n_train = n_total - n_test
 
-        if len(train) < 20 or len(test) == 0:
+        if n_train < 20 or n_test == 0:
             return name, None, None, "Not enough data after lag creation"
 
-        X_train = sm.add_constant(train[feature_cols].values)
-        y_train = train[target_col].values.astype(float)
-        X_test = sm.add_constant(test[feature_cols].values)
-        y_test = test[target_col].values
+        train = df.iloc[:n_train]
+        test = df.iloc[n_train:]
 
-        # Fit NegBin
+        X_train = sm.add_constant(train[feature_cols].values.astype(float))
+        y_train = train[target_col].values.astype(float)
+        X_test = sm.add_constant(test[feature_cols].values.astype(float))
+
         model = sm.GLM(y_train, X_train, family=sm.families.NegativeBinomial(alpha=1.0))
         fit = model.fit()
 
-        pred = fit.predict(X_test)
+        pred = np.asarray(fit.predict(X_test), dtype=float)
         pred = np.maximum(pred, 0)
 
-        # Approximate intervals
-        resid_std = np.std(fit.resid_response)
+        resid_std = np.nanstd(np.asarray(fit.resid_response, dtype=float))
         lower = np.maximum(pred - 1.96 * resid_std, 0)
         upper = pred + 1.96 * resid_std
 
@@ -473,16 +482,15 @@ def plot_final_forecasts(ts_weekly, summary, forecast_horizon=4):
         elif "UCM" in best_model_name or "BSTS" in best_model_name:
             name, pred, lower, upper = fit_ucm(train, forecast_horizon)
         elif "NegBin" in best_model_name:
-            train_df = disease_data.copy()
-            # Create a dummy test_df for forecast period
-            last_date = disease_data["period"].max()
-            future_dates = pd.date_range(last_date + pd.Timedelta(weeks=1), periods=forecast_horizon, freq="W")
-            test_df = pd.DataFrame({"period": future_dates, "case_count": np.nan,
-                                     "disease_key": disease_key, "disease_name": disease_name})
-            for col in disease_data.columns:
-                if col not in test_df.columns:
-                    test_df[col] = np.nan
-            name, pred, lower, upper = fit_negbin_glm(train_df, test_df)
+            # For final forecast: use last few rows as pseudo-test
+            # NegBin needs lag features, so we forecast from last known data
+            n_hist = len(disease_data)
+            if n_hist > forecast_horizon + 10:
+                train_df = disease_data.iloc[:n_hist - forecast_horizon].copy()
+                test_df = disease_data.iloc[n_hist - forecast_horizon:].copy()
+                name, pred, lower, upper = fit_negbin_glm(train_df, test_df)
+            else:
+                name, pred, lower, upper = "NegBin GLM", None, None, "Not enough data"
         else:
             continue
 
