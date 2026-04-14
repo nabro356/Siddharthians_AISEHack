@@ -56,11 +56,11 @@ DISEASE_CODES = {
         "alert_rules": [
             {
                 "level": "P1",
-                "name": "Single DHF case",
-                "description": "≥1 suspected dengue case in a mandal (IDSP)",
+                "name": "Cluster",
+                "description": "≥15 suspected dengue cases in a mandal (Data-Driven)",
                 "type": "threshold_mandal",
-                "min_cases": 1,
-                "window_weeks": 1,
+                "min_cases": 15,
+                "window_weeks": 2,
             },
             {
                 "level": "P2",
@@ -87,9 +87,9 @@ DISEASE_CODES = {
             {
                 "level": "P2",
                 "name": "Cluster",
-                "description": "≥5 cases in a mandal in 1 week",
+                "description": "≥15 cases in a mandal in 1 week",
                 "type": "threshold_mandal",
-                "min_cases": 5,
+                "min_cases": 15,
                 "window_weeks": 1,
             },
         ],
@@ -101,10 +101,10 @@ DISEASE_CODES = {
         "alert_rules": [
             {
                 "level": "P1",
-                "name": "Single case",
-                "description": "≥1 case of cholera (IDSP: single case = outbreak)",
+                "name": "Cluster",
+                "description": "≥2 cases of cholera (Data-Driven)",
                 "type": "threshold_mandal",
-                "min_cases": 1,
+                "min_cases": 2,
                 "window_weeks": 1,
             },
             {
