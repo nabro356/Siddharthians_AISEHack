@@ -479,10 +479,18 @@ def render_geographic(df_clean, ts_district_weekly, selected_diseases):
 
     d_data = df_sel[df_sel["disease_key"] == disease_selector]
     
+    if d_data.empty:
+        st.info("No data available for the selected dates.")
+        return
+        
+    latest_date = d_data["event_date"].max()
+    cutoff_date = latest_date - timedelta(days=28)
+    recent_d_data = d_data[d_data["event_date"] >= cutoff_date]
+    
     # 1. Spatial Map (if lat/lon exist)
-    if "latitude" in d_data.columns and "longitude" in d_data.columns:
+    if "latitude" in recent_d_data.columns and "longitude" in recent_d_data.columns:
         # Group by mandal and lat/lon to get bubble sizes
-        geo_data = d_data.dropna(subset=["latitude", "longitude"])
+        geo_data = recent_d_data.dropna(subset=["latitude", "longitude"])
         if not geo_data.empty:
             mandal_geo = geo_data.groupby(["mandal", "district"]).agg({
                 "latitude": "first",
@@ -490,7 +498,9 @@ def render_geographic(df_clean, ts_district_weekly, selected_diseases):
                 "op_id": "count" if "op_id" in geo_data.columns else "size"
             }).reset_index().rename(columns={"op_id": "cases", 0: "cases"})
             
-            st.markdown(f"#### Spatial Spread — {DISEASE_CODES[disease_selector]['name']}")
+            title_text = f"#### Spatial Spread — {DISEASE_CODES[disease_selector]['name']}<br><span style='font-size:0.7em; color:gray;'>Cases from {cutoff_date.strftime('%d %b %Y')} to {latest_date.strftime('%d %b %Y')} (Past 28 Days)</span>"
+            st.markdown(title_text, unsafe_allow_html=True)
+            
             fig_map = px.scatter_mapbox(
                 mandal_geo, 
                 lat="latitude", lon="longitude", 
@@ -510,8 +520,8 @@ def render_geographic(df_clean, ts_district_weekly, selected_diseases):
             st.plotly_chart(fig_map, use_container_width=True)
             st.markdown("---")
 
-    # 2. District-level bar chart
-    district_counts = d_data.groupby("district").size().reset_index(name="cases")
+    # 2. District-level bar chart (Last 28 Days)
+    district_counts = recent_d_data.groupby("district").size().reset_index(name="cases")
     district_counts = district_counts.sort_values("cases", ascending=True)
 
     fig = go.Figure(go.Bar(
