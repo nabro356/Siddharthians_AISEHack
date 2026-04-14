@@ -102,29 +102,25 @@ def load_data(file_path):
 
 
 @st.cache_data(show_spinner="Aggregating time series...")
-def get_time_series(df_clean):
-    ts_weekly = aggregate_time_series(df_clean, freq="W")
+def get_time_series(df_clean_hashable, ref_date_key):
+    ts_weekly = aggregate_time_series(df_clean_hashable, freq="W", group_cols=[])
+    ts_mandal_weekly = aggregate_time_series(df_clean_hashable, freq="W", group_cols=["mandal"])
     
-    # Only aggregate by mandal/district if those columns exist in the clean data
-    ts_mandal_weekly = pd.DataFrame()
-    if "mandal" in df_clean.columns:
-        ts_mandal_weekly = aggregate_time_series(df_clean, freq="W", group_cols=["mandal"])
-        
     ts_district_weekly = pd.DataFrame()
-    if "district" in df_clean.columns:
-        ts_district_weekly = aggregate_time_series(df_clean, freq="W", group_cols=["district"])
+    if "district" in df_clean_hashable.columns:
+        ts_district_weekly = aggregate_time_series(df_clean_hashable, freq="W", group_cols=["district"])
         
     return ts_weekly, ts_mandal_weekly, ts_district_weekly
 
 
 @st.cache_data(show_spinner="Running forecasts...")
-def get_forecasts(_ts_weekly, horizon=4):
-    return forecast_all(_ts_weekly, horizon=horizon)
+def get_forecasts(ts_weekly_hashable, ref_date_key, horizon=4):
+    return forecast_all(ts_weekly_hashable, horizon=horizon)
 
 
 @st.cache_data(show_spinner="Evaluating alert rules...")
-def get_alerts(_df_clean, _ts_weekly, _ts_mandal_weekly):
-    return evaluate_rules(_df_clean, _ts_weekly, _ts_mandal_weekly)
+def get_alerts(df_clean_hashable, ts_weekly_hashable, ts_mandal_hashable, ref_date_key):
+    return evaluate_rules(df_clean_hashable, ts_weekly_hashable, ts_mandal_hashable)
 
 
 # =========================================================================
@@ -622,15 +618,17 @@ def main():
     if df_clean.empty:
         st.warning(f"No records found before {ref_date}.")
         return
+        
+    cache_key = str(ref_date)
 
     # Aggregate
-    ts_weekly, ts_mandal_weekly, ts_district_weekly = get_time_series(df_clean)
+    ts_weekly, ts_mandal_weekly, ts_district_weekly = get_time_series(df_clean, cache_key)
 
     # Forecasts
-    forecasts = get_forecasts(ts_weekly, horizon=forecast_horizon)
+    forecasts = get_forecasts(ts_weekly, cache_key, horizon=forecast_horizon)
 
     # Alerts
-    alerts_df = get_alerts(df_clean, ts_weekly, ts_mandal_weekly)
+    alerts_df = get_alerts(df_clean, ts_weekly, ts_mandal_weekly, cache_key)
 
     # Tabs
     tab_overview, tab_forecast, tab_alerts, tab_geo = st.tabs([
