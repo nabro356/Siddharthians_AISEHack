@@ -81,6 +81,9 @@ def _eval_threshold_mandal(disease_data, rule, ref_date, ts_mandal_weekly, disea
                 if h_row["case_count"] >= min_cases:
                     onset_date = h_row["period"]
                     consecutive_weeks += 1
+                    # Cap tracing to 12 weeks max (if it's been active for 3 months, it's the new baseline, not a single continuous outbreak)
+                    if consecutive_weeks >= 12:
+                        break
                 else:
                     break # Outbreak chain broken
         
