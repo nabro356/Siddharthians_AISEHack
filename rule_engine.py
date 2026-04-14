@@ -124,20 +124,20 @@ def _eval_surge(ts_weekly, rule, disease_key):
     baseline = disease_ts.iloc[-(baseline_weeks + 1):-1]["case_count"]
     baseline_mean = baseline.mean()
 
-        if baseline_mean > 0 and latest["case_count"] >= multiplier * baseline_mean:
-            ratio = latest["case_count"] / baseline_mean
-            
-            # For a surge, the onset is this week itself
-            onset_date = latest["period"]
-            
-            alerts.append({
-                "mandal": "State-wide",
-                "district": "State-wide",
-                "cases": int(latest["case_count"]),
-                "onset_date": onset_date,
-                "detail": f"Weekly cases ({int(latest['case_count'])}) = {ratio:.1f}x baseline avg ({baseline_mean:.1f})",
-            })
-        return alerts
+    if baseline_mean > 0 and latest["case_count"] >= multiplier * baseline_mean:
+        ratio = latest["case_count"] / baseline_mean
+        
+        # For a surge, the onset is this week itself
+        onset_date = latest["period"]
+        
+        alerts.append({
+            "mandal": "State-wide",
+            "district": "State-wide",
+            "cases": int(latest["case_count"]),
+            "onset_date": onset_date,
+            "detail": f"Weekly cases ({int(latest['case_count'])}) = {ratio:.1f}x baseline avg ({baseline_mean:.1f})",
+        })
+    return alerts
 
 
 def _eval_gap_reappearance(ts_mandal_weekly, rule, disease_key):
